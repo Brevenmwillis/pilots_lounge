@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Pilots Lounge: Find, review, and connect with flight schools, instructors, mechanics, rentals, charters, and airports. Zillow-style mapping for pilots.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0175C2">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Pilots Lounge">
+  <meta property="og:description" content="Find, review, and connect with flight schools, instructors, mechanics, rentals, charters, and airports. Zillow-style mapping for pilots.">
+  <meta property="og:image" content="icons/Icon-512.png">
+  <meta property="og:url" content="https://pilots-lounge.web.app/">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Pilots Lounge">
+  <meta name="twitter:description" content="Find, review, and connect with flight schools, instructors, mechanics, rentals, charters, and airports. Zillow-style mapping for pilots.">
+  <meta name="twitter:image" content="icons/Icon-512.png">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Pilots Lounge">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <!-- Google Sign-In Client ID -->
+  <meta name="google-signin-client_id" content="98797365182-2dscbndjr127hr2el9a7eiq6codgbgog.apps.googleusercontent.com">
+
+  <title>Pilots Lounge</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+  <!-- Firebase SDKs -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBoxxMPqlJ6ETT6NatkWMiONMv3NlcspCQ",
+  authDomain: "pilots-lounge-a24a2.firebaseapp.com",
+  projectId: "pilots-lounge-a24a2",
+  storageBucket: "pilots-lounge-a24a2.firebasestorage.app",
+  messagingSenderId: "98797365182",
+  appId: "1:98797365182:web:dd3f8d3b8e6afd2e747bef",
+  measurementId: "G-K91QPDZM3Z"
+};
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const storage = getStorage(app);
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBANqq8Kt3OQYJI3UIopaYsUbC-Pml86DY&libraries=places"></script>
+
+</body>
+</html>
