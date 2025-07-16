@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:pilots_lounge/models/user_profile.dart';
 import 'package:pilots_lounge/models/aircraft.dart';
 import 'package:pilots_lounge/models/instructor.dart';
+import 'package:pilots_lounge/models/mechanic.dart';
+import 'package:pilots_lounge/models/flight_school.dart';
 import 'package:pilots_lounge/models/review.dart';
 
 class FirestoreService {
@@ -330,6 +332,174 @@ class FirestoreService {
     } catch (e) {
       // ignore: avoid_print
       print('Error deleting instructor: $e');
+      rethrow;
+    }
+  }
+
+  // Mechanic Operations
+  Future<String> createMechanic(Mechanic mechanic) async {
+    try {
+      final docRef = await _firestore.collection('mechanics').add({
+        'name': mechanic.name,
+        'location': mechanic.location,
+        'lat': mechanic.lat,
+        'lng': mechanic.lng,
+        'specializations': mechanic.specializations,
+        'averageQuotes': mechanic.averageQuotes,
+        'contactInfo': mechanic.contactInfo,
+        'travels': mechanic.travels,
+        'rating': mechanic.rating,
+        'reviews': mechanic.reviews.map((r) => r.toFirestore()).toList(),
+        'lastUpdated': FieldValue.serverTimestamp(),
+        'isActive': mechanic.isActive,
+        'createdAt': FieldValue.serverTimestamp(),
+        'ownerId': _auth.currentUser?.uid,
+      });
+      return docRef.id;
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error creating mechanic: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Mechanic>> getMechanics() async {
+    try {
+      final querySnapshot = await _firestore.collection('mechanics').where('isActive', isEqualTo: true).get();
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return Mechanic(
+          id: doc.id,
+          name: data['name'] ?? '',
+          location: data['location'] ?? '',
+          lat: (data['lat'] ?? 0).toDouble(),
+          lng: (data['lng'] ?? 0).toDouble(),
+          specializations: List<String>.from(data['specializations'] ?? []),
+          averageQuotes: Map<String, double>.from(data['averageQuotes'] ?? {}),
+          contactInfo: data['contactInfo'] ?? '',
+          travels: data['travels'] ?? false,
+          rating: (data['rating'] ?? 0).toDouble(),
+          reviews: (data['reviews'] as List?)?.map((r) => Review(
+            id: r['id'] ?? '',
+            userId: r['userId'] ?? '',
+            userName: r['userName'] ?? '',
+            rating: (r['rating'] ?? 0.0).toDouble(),
+            comment: r['comment'] ?? '',
+            date: r['date'] != null ? r['date'].toDate() : DateTime.now(),
+            ownerResponse: r['ownerResponse'],
+          )).toList() ?? [],
+          lastUpdated: data['lastUpdated']?.toDate() ?? DateTime.now(),
+          isActive: data['isActive'] ?? true,
+        );
+      }).toList();
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error getting mechanics: $e');
+      return [];
+    }
+  }
+
+  Future<void> updateMechanic(String mechanicId, Map<String, dynamic> updates) async {
+    try {
+      updates['lastUpdated'] = FieldValue.serverTimestamp();
+      await _firestore.collection('mechanics').doc(mechanicId).update(updates);
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error updating mechanic: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteMechanic(String mechanicId) async {
+    try {
+      await _firestore.collection('mechanics').doc(mechanicId).delete();
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error deleting mechanic: $e');
+      rethrow;
+    }
+  }
+
+  // Flight School Operations
+  Future<String> createFlightSchool(FlightSchool school) async {
+    try {
+      final docRef = await _firestore.collection('flight_schools').add({
+        'name': school.name,
+        'location': school.location,
+        'lat': school.lat,
+        'lng': school.lng,
+        'rating': school.rating,
+        'price': school.price,
+        'curriculum': school.curriculum,
+        'planesAvailable': school.planesAvailable,
+        'averageGraduationCost': school.averageGraduationCost,
+        'reviews': school.reviews.map((r) => r.toFirestore()).toList(),
+        'lastUpdated': FieldValue.serverTimestamp(),
+        'isActive': school.isActive,
+        'createdAt': FieldValue.serverTimestamp(),
+        'ownerId': _auth.currentUser?.uid,
+      });
+      return docRef.id;
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error creating flight school: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<FlightSchool>> getFlightSchools() async {
+    try {
+      final querySnapshot = await _firestore.collection('flight_schools').where('isActive', isEqualTo: true).get();
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return FlightSchool(
+          id: doc.id,
+          name: data['name'] ?? '',
+          location: data['location'] ?? '',
+          lat: (data['lat'] ?? 0).toDouble(),
+          lng: (data['lng'] ?? 0).toDouble(),
+          rating: (data['rating'] ?? 0).toDouble(),
+          price: (data['price'] ?? 0).toDouble(),
+          curriculum: List<String>.from(data['curriculum'] ?? []),
+          planesAvailable: List<String>.from(data['planesAvailable'] ?? []),
+          averageGraduationCost: (data['averageGraduationCost'] ?? 0).toDouble(),
+          reviews: (data['reviews'] as List?)?.map((r) => Review(
+            id: r['id'] ?? '',
+            userId: r['userId'] ?? '',
+            userName: r['userName'] ?? '',
+            rating: (r['rating'] ?? 0.0).toDouble(),
+            comment: r['comment'] ?? '',
+            date: r['date'] != null ? r['date'].toDate() : DateTime.now(),
+            ownerResponse: r['ownerResponse'],
+          )).toList() ?? [],
+          lastUpdated: data['lastUpdated']?.toDate() ?? DateTime.now(),
+          isActive: data['isActive'] ?? true,
+        );
+      }).toList();
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error getting flight schools: $e');
+      return [];
+    }
+  }
+
+  Future<void> updateFlightSchool(String schoolId, Map<String, dynamic> updates) async {
+    try {
+      updates['lastUpdated'] = FieldValue.serverTimestamp();
+      await _firestore.collection('flight_schools').doc(schoolId).update(updates);
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error updating flight school: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteFlightSchool(String schoolId) async {
+    try {
+      await _firestore.collection('flight_schools').doc(schoolId).delete();
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error deleting flight school: $e');
       rethrow;
     }
   }

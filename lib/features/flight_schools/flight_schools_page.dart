@@ -3,7 +3,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:pilots_lounge/models/flight_school.dart';
 import 'package:pilots_lounge/services/map_icons.dart';
 import 'package:pilots_lounge/services/placeholder_images.dart';
-import 'package:pilots_lounge/services/firestore/data_service.dart';
+import 'package:pilots_lounge/services/firestore/firestore_service.dart';
 import 'package:pilots_lounge/widgets/loading_overlay.dart';
 import 'package:pilots_lounge/widgets/error_widgets.dart';
 import 'package:pilots_lounge/widgets/app_scaffold.dart';
@@ -20,7 +20,7 @@ class FlightSchoolsPage extends StatefulWidget {
 class _FlightSchoolsPageState extends State<FlightSchoolsPage> {
   // ignore: unused_field
   GoogleMapController? _mapController;
-  final DataService _dataService = DataService();
+  final FirestoreService _firestoreService = FirestoreService();
   List<FlightSchool> _schools = [];
   bool _isLoading = true;
   String? _error;
@@ -37,7 +37,7 @@ class _FlightSchoolsPageState extends State<FlightSchoolsPage> {
       _error = null;
     });
     try {
-      final schools = await _dataService.getFlightSchools();
+      final schools = await _firestoreService.getFlightSchools();
       setState(() {
         _schools = schools;
         _isLoading = false;

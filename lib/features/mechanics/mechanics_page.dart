@@ -3,7 +3,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:pilots_lounge/models/mechanic.dart';
 import 'package:pilots_lounge/services/map_icons.dart';
 import 'package:pilots_lounge/services/placeholder_images.dart';
-import 'package:pilots_lounge/services/firestore/data_service.dart';
+import 'package:pilots_lounge/services/firestore/firestore_service.dart';
 import 'package:pilots_lounge/widgets/loading_overlay.dart';
 import 'package:pilots_lounge/widgets/error_widgets.dart';
 import 'package:pilots_lounge/widgets/app_scaffold.dart';
@@ -20,7 +20,7 @@ class MechanicsPage extends StatefulWidget {
 class _MechanicsPageState extends State<MechanicsPage> {
   // ignore: unused_field
   GoogleMapController? _mapController;
-  final DataService _dataService = DataService();
+  final FirestoreService _firestoreService = FirestoreService();
   List<Mechanic> _mechanics = [];
   bool _isLoading = true;
   String? _error;
@@ -37,7 +37,7 @@ class _MechanicsPageState extends State<MechanicsPage> {
       _error = null;
     });
     try {
-      final mechanics = await _dataService.getMechanics();
+      final mechanics = await _firestoreService.getMechanics();
       setState(() {
         _mechanics = mechanics;
         _isLoading = false;
@@ -215,12 +215,6 @@ class _MechanicsPageState extends State<MechanicsPage> {
       child: MechanicForm(
         mechanic: mechanic,
         onSaved: (newMechanic) async {
-          // If editing, update; else, create
-          if (mechanic != null) {
-            // TODO: update logic
-          } else {
-            // TODO: create logic
-          }
           Navigator.of(context).pop();
           await _loadMechanics();
         },
@@ -230,8 +224,13 @@ class _MechanicsPageState extends State<MechanicsPage> {
 
   // ignore: unused_element
   void _deleteMechanic(Mechanic mechanic) async {
-    // TODO: delete logic
-    await _loadMechanics();
+    try {
+      await FirestoreService().deleteMechanic(mechanic.id);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mechanic deleted successfully!')));
+      await _loadMechanics();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting mechanic: $e')));
+    }
   }
 
   @override
@@ -364,8 +363,12 @@ class MechanicCard extends StatelessWidget {
                         child: MechanicForm(
                           mechanic: mechanic,
                           onSaved: (updatedMechanic) async {
-                            // TODO: update logic
                             Navigator.of(context).pop();
+                            // Refresh the page data
+                            if (context.mounted) {
+                              final state = context.findAncestorStateOfType<_MechanicsPageState>();
+                              state?._loadMechanics();
+                            }
                           },
                         ),
                       );
@@ -386,7 +389,18 @@ class MechanicCard extends StatelessWidget {
                         ),
                       );
                       if (confirmed == true) {
-                        // TODO: delete logic
+                        try {
+                          await FirestoreService().deleteMechanic(mechanic.id);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mechanic deleted successfully!')));
+                            final state = context.findAncestorStateOfType<_MechanicsPageState>();
+                            state?._loadMechanics();
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting mechanic: $e')));
+                          }
+                        }
                       }
                     },
                   ),
@@ -468,38 +482,298 @@ class MechanicForm extends StatefulWidget {
 }
 
 class _MechanicFormState extends State<MechanicForm> {
-  // TODO: Add controllers and form fields for all Mechanic properties
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _latController = TextEditingController();
+  final _lngController = TextEditingController();
+  final _contactInfoController = TextEditingController();
+  
+  final List<String> _specializations = [];
+  final Map<String, double> _averageQuotes = {};
+  
+  bool _travels = false;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.mechanic != null) {
+      _nameController.text = widget.mechanic!.name;
+      _locationController.text = widget.mechanic!.location;
+      _latController.text = widget.mechanic!.lat.toString();
+      _lngController.text = widget.mechanic!.lng.toString();
+      _contactInfoController.text = widget.mechanic!.contactInfo;
+      _travels = widget.mechanic!.travels;
+      _specializations.addAll(widget.mechanic!.specializations);
+      _averageQuotes.addAll(widget.mechanic!.averageQuotes);
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _locationController.dispose();
+    _latController.dispose();
+    _lngController.dispose();
+    _contactInfoController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    setState(() => _isLoading = true);
+    
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please sign in to create listings')));
+        return;
+      }
+
+      final mechanic = Mechanic(
+        id: widget.mechanic?.id ?? '',
+        name: _nameController.text,
+        location: _locationController.text,
+        lat: double.tryParse(_latController.text) ?? 0.0,
+        lng: double.tryParse(_lngController.text) ?? 0.0,
+        specializations: List.from(_specializations),
+        averageQuotes: Map.from(_averageQuotes),
+        contactInfo: _contactInfoController.text,
+        travels: _travels,
+        rating: widget.mechanic?.rating ?? 0.0,
+        reviews: widget.mechanic?.reviews ?? [],
+        lastUpdated: DateTime.now(),
+        isActive: true,
+      );
+
+      if (widget.mechanic != null) {
+        // Update existing
+        await FirestoreService().updateMechanic(mechanic.id, mechanic.toFirestore());
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mechanic updated successfully!')));
+      } else {
+        // Create new
+        await FirestoreService().createMechanic(mechanic);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mechanic created successfully!')));
+      }
+
+      await widget.onSaved(mechanic);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _addSpecialization() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Specialization'),
+        content: TextField(
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Specialization'),
+          onSubmitted: (value) {
+            if (value.isNotEmpty) {
+              setState(() => _specializations.add(value));
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              final controller = TextEditingController();
+              if (controller.text.isNotEmpty) {
+                setState(() => _specializations.add(controller.text));
+              }
+              Navigator.of(context).pop();
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _addQuote() {
+    String service = '', price = '';
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Average Quote'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              decoration: const InputDecoration(labelText: 'Service'),
+              onChanged: (v) => service = v,
+            ),
+            TextField(
+              decoration: const InputDecoration(labelText: 'Price'),
+              keyboardType: TextInputType.number,
+              onChanged: (v) => price = v,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              if (service.isNotEmpty && price.isNotEmpty) {
+                final priceValue = double.tryParse(price);
+                if (priceValue != null) {
+                  setState(() => _averageQuotes[service] = priceValue);
+                }
+              }
+              Navigator.of(context).pop();
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Mechanic', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          // TODO: Add TextFormFields for all required fields
-          const SizedBox(height: 16),
-          Row(
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () async {
-                    // TODO: Validate and save
-                    // widget.onSaved(newMechanic);
-                  },
-                  child: const Text('Save'),
-                ),
+              Text(
+                widget.mechanic != null ? 'Edit Mechanic' : 'Create Mechanic',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
+              const SizedBox(height: 16),
+              
+              // Basic Information
+              const Text('Basic Information', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Name *'),
+                validator: (v) => v?.isEmpty == true ? 'Required' : null,
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _locationController,
+                decoration: const InputDecoration(labelText: 'Location *'),
+                validator: (v) => v?.isEmpty == true ? 'Required' : null,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _latController,
+                      decoration: const InputDecoration(labelText: 'Latitude'),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _lngController,
+                      decoration: const InputDecoration(labelText: 'Longitude'),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Specializations
+              Row(
+                children: [
+                  const Text('Specializations', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: _addSpecialization,
+                  ),
+                ],
+              ),
+              if (_specializations.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ...(_specializations.map((spec) => Chip(
+                  label: Text(spec),
+                  onDeleted: () => setState(() => _specializations.remove(spec)),
+                ))),
+              ],
+              
+              const SizedBox(height: 16),
+              
+              // Average Quotes
+              Row(
+                children: [
+                  const Text('Average Quotes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: _addQuote,
+                  ),
+                ],
+              ),
+              if (_averageQuotes.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ...(_averageQuotes.entries.map((entry) => Chip(
+                  label: Text('${entry.key}: \$${entry.value}'),
+                  onDeleted: () => setState(() => _averageQuotes.remove(entry.key)),
+                ))),
+              ],
+              
+              const SizedBox(height: 16),
+              
+              // Contact Information
+              const Text('Contact Information', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _contactInfoController,
+                decoration: const InputDecoration(labelText: 'Contact Information *'),
+                validator: (v) => v?.isEmpty == true ? 'Required' : null,
+                maxLines: 2,
+              ),
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                title: const Text('Travels to customer location'),
+                value: _travels,
+                onChanged: (value) => setState(() => _travels = value ?? false),
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _save,
+                      child: _isLoading 
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        : Text(widget.mechanic != null ? 'Update' : 'Create'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
