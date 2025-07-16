@@ -11,6 +11,7 @@ import 'features/mechanics/mechanics_page.dart';
 import 'features/airports/airports_page.dart';
 import 'features/home/profile_page.dart';
 import 'features/home/create_listing_page.dart';
+import 'features/admin/data_seeder_page.dart';
 
 final _router = GoRouter(
   initialLocation: '/',
@@ -25,6 +26,7 @@ final _router = GoRouter(
     GoRoute(path: '/airports', builder: (_, __) => const AirportsPage()),
     GoRoute(path: '/profile', builder: (_, __) => const ProfilePage()),
     GoRoute(path: '/create-listing', builder: (_, __) => const CreateListingPage()),
+    GoRoute(path: '/admin/seed-data', builder: (_, __) => const DataSeederPage()),
   ],
 );
 

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:pilots_lounge/models/aircraft.dart';
+import 'package:pilots_lounge/services/firestore/data_service.dart';
 import 'package:pilots_lounge/services/map_icons.dart';
 import 'package:pilots_lounge/services/placeholder_images.dart';
 import 'package:pilots_lounge/widgets/app_scaffold.dart';
+import 'package:pilots_lounge/widgets/loading_overlay.dart';
+import 'package:pilots_lounge/widgets/error_widgets.dart';
 
 class RentalsPage extends StatefulWidget {
   const RentalsPage({super.key});
@@ -13,40 +16,37 @@ class RentalsPage extends StatefulWidget {
 }
 
 class _RentalsPageState extends State<RentalsPage> {
-  // ignore: unused_field
   GoogleMapController? _mapController;
+  final DataService _dataService = DataService();
+  List<Aircraft> _aircraft = [];
+  bool _isLoading = true;
+  String? _error;
 
-  final List<Aircraft> _aircraft = [
-    Aircraft(
-      id: '1',
-      registration: 'N12345',
-      make: 'Cessna',
-      model: '172 Skyhawk',
-      year: 2015,
-      price: 150,
-      location: 'Phoenix Sky Harbor',
-      lat: 33.4342,
-      lng: -112.0116,
-      avionics: ['Garmin G1000', 'Autopilot', 'ADS-B In/Out'],
-      specs: const {
-        'Engine': 'Lycoming O-320',
-        'HP': '160',
-        'Fuel Capacity': '56 gallons',
-        'Range': '575 nm',
-        'Cruise Speed': '120 knots',
-      },
-      rating: 4.7,
-      reviews: [],
-      ownerId: 'owner1',
-      bookingWebsite: 'https://example.com/book',
-      paymentMethods: ['Credit Card', 'Cash', 'Check'],
-      insuranceRequirements: r'$1M liability, $50K hull',
-      insuranceDeductible: 1000,
-      internationalFlights: false,
-      lastUpdated: DateTime(2023, 1, 1),
-      isActive: true,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadAircraft();
+  }
+
+  Future<void> _loadAircraft() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final aircraft = await _dataService.getAircraftForRent();
+      setState(() {
+        _aircraft = aircraft;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to load aircraft: $e';
+        _isLoading = false;
+      });
+    }
+  }
 
   Set<Marker> get _markers => _aircraft.map((a) {
         return Marker(
@@ -55,7 +55,7 @@ class _RentalsPageState extends State<RentalsPage> {
           icon: MapIcons.getRentalIcon(),
           infoWindow: InfoWindow(
             title: '${a.make} ${a.model}',
-            snippet: '${a.price}/hr',
+            snippet: '\$${a.price}/hr',
           ),
           onTap: () => _showAircraftDetails(a),
         );
@@ -74,7 +74,6 @@ class _RentalsPageState extends State<RentalsPage> {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                // ignore: deprecated_member_use
                 color: Colors.black.withOpacity(0.3),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
@@ -105,22 +104,39 @@ class _RentalsPageState extends State<RentalsPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '\$${aircraft.price}/hr',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          color: Colors.green,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        'Registration: ${aircraft.registration}',
+                        style: const TextStyle(fontSize: 16),
                       ),
-                      const SizedBox(height: 16),
+                      Text(
+                        'Year: ${aircraft.year}',
+                        style: const TextStyle(fontSize: 16),
+                      ),
                       Text(
                         'Location: ${aircraft.location}',
                         style: const TextStyle(fontSize: 16),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Year: ${aircraft.year}',
-                        style: const TextStyle(fontSize: 16),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Text(
+                            '\$${aircraft.price}/hr',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
+                          ),
+                          const Spacer(),
+                          Row(
+                            children: [
+                              const Icon(Icons.star, color: Colors.amber, size: 20),
+                              Text(
+                                aircraft.rating.toString(),
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
                       const Text(
@@ -146,40 +162,27 @@ class _RentalsPageState extends State<RentalsPage> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      ...aircraft.specs.entries.map((entry) => 
+                      ...aircraft.specs.entries.map((spec) => 
                         Padding(
                           padding: const EdgeInsets.only(bottom: 4),
-                          child: Text('${entry.key}: ${entry.value}', style: const TextStyle(fontSize: 14)),
+                          child: Text('• ${spec.key}: ${spec.value}', style: const TextStyle(fontSize: 14)),
                         ),
                       ),
                       const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                              },
-                              style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                              ),
-                              child: const Text('Close'),
-                            ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            // TODO: Implement booking functionality
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                                _openBookingWebsite(aircraft);
-                              },
-                              style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                              ),
-                              child: const Text('Book Now'),
-                            ),
-                          ),
-                        ],
+                          child: const Text('Book This Aircraft'),
+                        ),
                       ),
                     ],
                   ),
@@ -192,90 +195,121 @@ class _RentalsPageState extends State<RentalsPage> {
     );
   }
 
-  void _openBookingWebsite(Aircraft aircraft) {
-    if (aircraft.bookingWebsite.isNotEmpty) {
-      // This part of the code was removed as per the edit hint.
-      // The original code used url_launcher, which is no longer imported.
-      // The booking website functionality is now a placeholder.
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Booking website: ${aircraft.bookingWebsite}')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No booking website available for this aircraft.')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    if (_error != null) {
+      return AppScaffold(
+        currentIndex: 0,
+        child: NetworkErrorWidget(
+          onRetry: _loadAircraft,
+          customMessage: _error,
+        ),
+      );
+    }
+
+    if (_aircraft.isEmpty && !_isLoading) {
+      return AppScaffold(
+        currentIndex: 0,
+        child: EmptyState(
+          title: 'No Aircraft Available',
+          message: 'There are currently no aircraft available for rent in your area.',
+          icon: Icons.flight,
+          onAction: _loadAircraft,
+          actionText: 'Refresh',
+        ),
+      );
+    }
+
     return AppScaffold(
-      currentIndex: 1,
-      child: Stack(
-        children: [
-          GoogleMap(
-            initialCameraPosition: const CameraPosition(
-              target: LatLng(33.4, -111.8),
-              zoom: 9,
-            ),
-            markers: _markers,
-            onMapCreated: (c) => _mapController = c,
-            myLocationEnabled: true,
-            zoomControlsEnabled: false,
-          ),
-          DraggableScrollableSheet(
-            initialChildSize: 0.4,
-            minChildSize: 0.3,
-            maxChildSize: 0.8,
-            builder: (_, controller) => Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                boxShadow: [BoxShadow(blurRadius: 10, color: Colors.black26)],
+      currentIndex: 0,
+      child: LoadingOverlay(
+        isLoading: _isLoading,
+        message: 'Loading aircraft...',
+        child: Stack(
+          children: [
+            GoogleMap(
+              initialCameraPosition: const CameraPosition(
+                target: LatLng(33.4, -111.8),
+                zoom: 9,
               ),
-              child: Column(
-                children: [
-                  // Drag handle
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(2),
+              markers: _markers,
+              onMapCreated: (c) => _mapController = c,
+              myLocationEnabled: true,
+              zoomControlsEnabled: false,
+            ),
+            DraggableScrollableSheet(
+              initialChildSize: 0.4,
+              minChildSize: 0.3,
+              maxChildSize: 0.8,
+              builder: (_, controller) => Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  boxShadow: [BoxShadow(blurRadius: 10, color: Colors.black26)],
+                ),
+                child: Column(
+                  children: [
+                    // Drag handle
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                  ),
-                  // Cards
-                  Expanded(
-                    child: ListView.builder(
-                      controller: controller,
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      itemCount: _aircraft.length,
-                      itemBuilder: (_, i) => Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: AircraftRentalCard(
-                          aircraft: _aircraft[i],
-                          onTap: () => _showAircraftDetails(_aircraft[i]),
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Row(
+                        children: [
+                          const Text(
+                            'Available Aircraft',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '${_aircraft.length} aircraft',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Cards
+                    Expanded(
+                      child: ListView.builder(
+                        controller: controller,
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        itemCount: _aircraft.length,
+                        itemBuilder: (_, i) => Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: AircraftCard(aircraft: _aircraft[i]),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class AircraftRentalCard extends StatelessWidget {
+class AircraftCard extends StatelessWidget {
   final Aircraft aircraft;
-  final VoidCallback onTap;
   
-  const AircraftRentalCard({required this.aircraft, required this.onTap, super.key});
+  const AircraftCard({required this.aircraft, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -289,16 +323,29 @@ class AircraftRentalCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              '${aircraft.make} ${aircraft.model}',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              '\$${aircraft.price}/hr',
-              style: const TextStyle(fontSize: 13, color: Colors.green, fontWeight: FontWeight.bold),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${aircraft.make} ${aircraft.model}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.blue,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'RENTAL',
+                    style: TextStyle(color: Colors.white, fontSize: 9),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 2),
             Text(
@@ -310,35 +357,30 @@ class AircraftRentalCard extends StatelessWidget {
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.star, size: 12, color: Colors.amber),
-                Text('${aircraft.rating}', style: const TextStyle(fontSize: 11)),
-                const SizedBox(width: 4),
-                Text('(${aircraft.reviews.length} reviews)', 
-                     style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                Text(
+                  '\$${aircraft.price}/hr',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Colors.green,
+                  ),
+                ),
+                const Spacer(),
+                Row(
+                  children: [
+                    const Icon(Icons.star, color: Colors.amber, size: 14),
+                    Text(
+                      aircraft.rating.toString(),
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text(
-              'Avionics: ${aircraft.avionics.take(2).join(", ")}', 
-              style: const TextStyle(fontSize: 9),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Insurance: \$${aircraft.insuranceDeductible} deductible', 
-              style: const TextStyle(fontSize: 9),
-            ),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: onTap,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                ),
-                child: const Text('Book Now', style: TextStyle(fontSize: 11)),
-              ),
+              '${aircraft.year} • ${aircraft.registration}',
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
             ),
           ],
         ),
