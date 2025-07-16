@@ -9,6 +9,8 @@ import 'package:pilots_lounge/models/mechanic.dart';
 import 'package:pilots_lounge/models/flight_school.dart';
 import 'package:pilots_lounge/models/airport.dart';
 import 'package:pilots_lounge/models/review.dart';
+import 'package:pilots_lounge/services/faa_pdf_parser.dart';
+import 'package:pilots_lounge/models/faa_airport_data.dart';
 
 class DataSeeder {
   static final DataSeeder _instance = DataSeeder._internal();
@@ -546,22 +548,134 @@ class DataSeeder {
     print('Clearing all data...');
     
     try {
-      final collections = ['aircraft', 'instructors', 'mechanics', 'flight_schools', 'airports'];
-      
-      for (final collection in collections) {
-        final snapshot = await _firestore.collection(collection).get();
-        final batch = _firestore.batch();
-        
-        for (final doc in snapshot.docs) {
-          batch.delete(doc.reference);
-        }
-        
-        await batch.commit();
-      }
+      // Clear all collections
+      await _clearCollection('aircraft_listings');
+      await _clearCollection('instructors');
+      await _clearCollection('mechanics');
+      await _clearCollection('flight_schools');
+      await _clearCollection('airports');
       
       print('✅ All data cleared successfully!');
     } catch (e) {
       print('❌ Error clearing data: $e');
+      rethrow;
     }
+  }
+
+  // Extract and seed airport data from FAA PDF
+  Future<void> seedAirportsFromFaaPdf() async {
+    print('Extracting airport data from FAA PDF...');
+    
+    try {
+      final pdfParser = FAAPdfParser();
+      await pdfParser.loadChartSupplement();
+      
+      // Get all airport identifiers from the PDF
+      final airportIdentifiers = pdfParser.getAllAirportIdentifiers();
+      print('Found ${airportIdentifiers.length} airport identifiers in PDF');
+      
+      // Extract data for each airport (limit to first 20 for performance)
+      final airportsToProcess = airportIdentifiers.take(20).toList();
+      int successCount = 0;
+      
+      for (final identifier in airportsToProcess) {
+        try {
+          final faaData = pdfParser.findAirportData(identifier);
+          if (faaData != null) {
+            // Convert FAA data to Airport model
+            final airport = _convertFaaDataToAirport(faaData);
+            
+            // Save to Firestore
+            await _firestore.collection('airports').add(airport.toFirestore());
+            successCount++;
+            print('✅ Added airport: ${airport.code} - ${airport.name}');
+          }
+        } catch (e) {
+          print('❌ Error processing airport $identifier: $e');
+        }
+      }
+      
+      print('✅ Successfully added $successCount airports from FAA PDF');
+    } catch (e) {
+      print('❌ Error extracting airport data from PDF: $e');
+      rethrow;
+    }
+  }
+
+  // Convert FAA airport data to Airport model
+  Airport _convertFaaDataToAirport(FAAAirportData faaData) {
+    return Airport(
+      id: '',
+      code: faaData.identifier,
+      name: faaData.name,
+      location: '${faaData.city}, ${faaData.state}',
+      lat: faaData.latitude,
+      lng: faaData.longitude,
+      rating: 4.0, // Default rating
+      reviews: [],
+      restaurants: _extractRestaurantsFromServices(faaData.services),
+      services: _extractServicesFromFaaData(faaData),
+      hasCourtesyCar: faaData.services.any((s) => s.type == 'FBO'),
+      hasSelfServeFuel: faaData.fuelTypes.isNotEmpty,
+      tipsAndTricks: ['Check NOTAMs before flight', 'Call FBO for current fuel prices'],
+      hasTieDowns: true, // Most airports have tie-downs
+      hasHangars: faaData.services.any((s) => s.capabilities.contains('Hangar')),
+      tieDownPrice: 15.0, // Default price
+      hangarPrice: 300.0, // Default price
+      lastUpdated: DateTime.now(),
+      isActive: true,
+    );
+  }
+
+  // Extract restaurant information from FBO services
+  List<String> _extractRestaurantsFromServices(List<Service> services) {
+    final restaurants = <String>[];
+    for (final service in services) {
+      if (service.capabilities.contains('Restaurant') || 
+          service.name.toLowerCase().contains('restaurant') ||
+          service.name.toLowerCase().contains('cafe')) {
+        restaurants.add(service.name);
+      }
+    }
+    return restaurants.isNotEmpty ? restaurants : ['FBO Restaurant'];
+  }
+
+  // Extract services from FAA data
+  List<String> _extractServicesFromFaaData(FAAAirportData faaData) {
+    final services = <String>[];
+    
+    // Add fuel types
+    services.addAll(faaData.fuelTypes);
+    
+    // Add service types
+    for (final service in faaData.services) {
+      services.add(service.type);
+    }
+    
+    // Add common services based on frequencies
+    for (final freq in faaData.frequencies) {
+      if (freq.type == 'TOWER') services.add('Control Tower');
+      if (freq.type == 'ATIS') services.add('ATIS');
+      if (freq.type == 'APPROACH') services.add('Approach Control');
+    }
+    
+    // Add runway services
+    if (faaData.runways.isNotEmpty) {
+      services.add('Runway Services');
+    }
+    
+    return services.isNotEmpty ? services : ['FBO Services'];
+  }
+
+  // Helper method to clear a specific collection
+  Future<void> _clearCollection(String collectionName) async {
+    final snapshot = await _firestore.collection(collectionName).get();
+    final batch = _firestore.batch();
+    
+    for (final doc in snapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    
+    await batch.commit();
   }
 } 

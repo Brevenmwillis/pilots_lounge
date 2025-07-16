@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pilots_lounge/services/data_seeder.dart';
 import 'package:pilots_lounge/widgets/loading_overlay.dart';
+// ignore: unused_import
 import 'package:pilots_lounge/widgets/error_widgets.dart';
 import 'package:pilots_lounge/widgets/enhanced_cards.dart';
 
@@ -58,6 +59,31 @@ class _DataSeederPageState extends State<DataSeederPage> {
     } catch (e) {
       setState(() {
         _statusMessage = '❌ Error clearing data: $e';
+        _isSuccess = false;
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _seedAirportsFromFaaPdf() async {
+    setState(() {
+      _isLoading = true;
+      _statusMessage = 'Extracting airport data from FAA PDF...';
+      _isSuccess = false;
+    });
+
+    try {
+      await _dataSeeder.seedAirportsFromFaaPdf();
+      setState(() {
+        _statusMessage = '✅ Airport data extracted from FAA PDF successfully!';
+        _isSuccess = true;
+      });
+    } catch (e) {
+      setState(() {
+        _statusMessage = '❌ Error extracting airport data: $e';
         _isSuccess = false;
       });
     } finally {
@@ -140,6 +166,14 @@ class _DataSeederPageState extends State<DataSeederPage> {
                 icon: Icons.cloud_upload,
                 color: Colors.blue,
                 onTap: _seedAllData,
+              ),
+              const SizedBox(height: 12),
+              ActionCard(
+                title: 'Extract Airports from FAA PDF',
+                subtitle: 'Extract real airport data from your FAA Chart Supplement PDF',
+                icon: Icons.description,
+                color: Colors.green,
+                onTap: _seedAirportsFromFaaPdf,
               ),
               const SizedBox(height: 12),
               ActionCard(
