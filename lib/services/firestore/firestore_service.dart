@@ -74,6 +74,7 @@ class FirestoreService {
         'internationalFlights': aircraft.internationalFlights,
         'lastUpdated': aircraft.lastUpdated,
         'isActive': aircraft.isActive,
+        'type': aircraft.type,
         'createdAt': FieldValue.serverTimestamp(),
         'status': 'pending', // pending, approved, rejected, sold
       });
@@ -132,6 +133,7 @@ class FirestoreService {
           internationalFlights: data['internationalFlights'] ?? false,
           lastUpdated: data['lastUpdated']?.toDate() ?? DateTime.now(),
           isActive: data['isActive'] ?? true,
+          type: data['type'] ?? 'rental',
         );
       }).toList();
     } catch (e) {
@@ -210,6 +212,7 @@ class FirestoreService {
             internationalFlights: data['internationalFlights'] ?? false,
             lastUpdated: data['lastUpdated']?.toDate() ?? DateTime.now(),
             isActive: data['isActive'] ?? true,
+            type: data['type'] ?? 'rental',
           );
         }).toList();
       } catch (e) {
@@ -367,6 +370,7 @@ class FirestoreService {
     try {
       final querySnapshot = await _firestore.collection('mechanics').where('isActive', isEqualTo: true).get();
       return querySnapshot.docs.map((doc) {
+        // ignore: unnecessary_cast
         final data = doc.data() as Map<String, dynamic>;
         return Mechanic(
           id: doc.id,
@@ -451,6 +455,7 @@ class FirestoreService {
     try {
       final querySnapshot = await _firestore.collection('flight_schools').where('isActive', isEqualTo: true).get();
       return querySnapshot.docs.map((doc) {
+        // ignore: unnecessary_cast
         final data = doc.data() as Map<String, dynamic>;
         return FlightSchool(
           id: doc.id,

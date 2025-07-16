@@ -94,8 +94,8 @@ class _ProfilePageState extends State<ProfilePage> with WidgetsBindingObserver {
                       const SizedBox(height: 16),
                       ElevatedButton.icon(
                         icon: const Icon(Icons.add),
-                        label: const Text('Create Aircraft Listing'),
-                        onPressed: () => context.go('/create-listing'),
+                        label: const Text('Create Listing'),
+                        onPressed: () => context.go('/listing-type-selection'),
                       ),
                       const SizedBox(height: 24),
                       const Text('My Listings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
