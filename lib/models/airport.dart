@@ -1,4 +1,4 @@
-// ignore: unused_import
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'review.dart';
 
 class Airport {
@@ -18,8 +18,9 @@ class Airport {
   final double tieDownPrice;
   final double hangarPrice;
   final double rating;
-  final List<dynamic> reviews;
+  final List<Review> reviews;
   final DateTime lastUpdated;
+  final bool isActive;
 
   Airport({
     required this.id,
@@ -40,5 +41,58 @@ class Airport {
     required this.rating,
     required this.reviews,
     required this.lastUpdated,
+    this.isActive = true,
   });
+
+  // Convert from Firestore document
+  factory Airport.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return Airport(
+      id: doc.id,
+      code: data['code'] ?? '',
+      name: data['name'] ?? '',
+      location: data['location'] ?? '',
+      lat: (data['lat'] ?? 0).toDouble(),
+      lng: (data['lng'] ?? 0).toDouble(),
+      restaurants: List<String>.from(data['restaurants'] ?? []),
+      hasCourtesyCar: data['hasCourtesyCar'] ?? false,
+      services: List<String>.from(data['services'] ?? []),
+      hasSelfServeFuel: data['hasSelfServeFuel'] ?? false,
+      tipsAndTricks: List<String>.from(data['tipsAndTricks'] ?? []),
+      hasTieDowns: data['hasTieDowns'] ?? false,
+      hasHangars: data['hasHangars'] ?? false,
+      tieDownPrice: (data['tieDownPrice'] ?? 0).toDouble(),
+      hangarPrice: (data['hangarPrice'] ?? 0).toDouble(),
+      rating: (data['rating'] ?? 0).toDouble(),
+      reviews: (data['reviews'] as List<dynamic>? ?? [])
+          .map((review) => Review.fromFirestore(review))
+          .toList(),
+      lastUpdated: (data['lastUpdated'] as Timestamp).toDate(),
+      isActive: data['isActive'] ?? true,
+    );
+  }
+
+  // Convert to Firestore document
+  Map<String, dynamic> toFirestore() {
+    return {
+      'code': code,
+      'name': name,
+      'location': location,
+      'lat': lat,
+      'lng': lng,
+      'restaurants': restaurants,
+      'hasCourtesyCar': hasCourtesyCar,
+      'services': services,
+      'hasSelfServeFuel': hasSelfServeFuel,
+      'tipsAndTricks': tipsAndTricks,
+      'hasTieDowns': hasTieDowns,
+      'hasHangars': hasHangars,
+      'tieDownPrice': tieDownPrice,
+      'hangarPrice': hangarPrice,
+      'rating': rating,
+      'reviews': reviews.map((review) => review.toFirestore()).toList(),
+      'lastUpdated': Timestamp.fromDate(lastUpdated),
+      'isActive': isActive,
+    };
+  }
 } 
