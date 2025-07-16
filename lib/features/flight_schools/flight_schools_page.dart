@@ -205,12 +205,6 @@ class _FlightSchoolsPageState extends State<FlightSchoolsPage> {
       child: FlightSchoolForm(
         school: school,
         onSaved: (newSchool) async {
-          // If editing, update; else, create
-          if (school != null) {
-            // TODO: update logic
-          } else {
-            // TODO: create logic
-          }
           Navigator.of(context).pop();
           await _loadFlightSchools();
         },
@@ -220,8 +214,13 @@ class _FlightSchoolsPageState extends State<FlightSchoolsPage> {
 
   // ignore: unused_element
   void _deleteFlightSchool(FlightSchool school) async {
-    // TODO: delete logic
-    await _loadFlightSchools();
+    try {
+      await FirestoreService().deleteFlightSchool(school.id);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Flight school deleted successfully!')));
+      await _loadFlightSchools();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting flight school: $e')));
+    }
   }
 
   @override
@@ -356,8 +355,12 @@ class FlightSchoolCard extends StatelessWidget {
                         child: FlightSchoolForm(
                           school: school,
                           onSaved: (updatedSchool) async {
-                            // TODO: update logic
                             Navigator.of(context).pop();
+                            // Refresh the page data
+                            if (context.mounted) {
+                              final state = context.findAncestorStateOfType<_FlightSchoolsPageState>();
+                              state?._loadFlightSchools();
+                            }
                           },
                         ),
                       );
@@ -378,7 +381,18 @@ class FlightSchoolCard extends StatelessWidget {
                         ),
                       );
                       if (confirmed == true) {
-                        // TODO: delete logic
+                        try {
+                          await FirestoreService().deleteFlightSchool(school.id);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Flight school deleted successfully!')));
+                            final state = context.findAncestorStateOfType<_FlightSchoolsPageState>();
+                            state?._loadFlightSchools();
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting flight school: $e')));
+                          }
+                        }
                       }
                     },
                   ),
@@ -450,38 +464,296 @@ class FlightSchoolForm extends StatefulWidget {
 }
 
 class _FlightSchoolFormState extends State<FlightSchoolForm> {
-  // TODO: Add controllers and form fields for all FlightSchool properties
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _latController = TextEditingController();
+  final _lngController = TextEditingController();
+  final _priceController = TextEditingController();
+  final _averageGraduationCostController = TextEditingController();
+  
+  final List<String> _curriculum = [];
+  final List<String> _planesAvailable = [];
+  
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.school != null) {
+      _nameController.text = widget.school!.name;
+      _locationController.text = widget.school!.location;
+      _latController.text = widget.school!.lat.toString();
+      _lngController.text = widget.school!.lng.toString();
+      _priceController.text = widget.school!.price.toString();
+      _averageGraduationCostController.text = widget.school!.averageGraduationCost.toString();
+      _curriculum.addAll(widget.school!.curriculum);
+      _planesAvailable.addAll(widget.school!.planesAvailable);
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _locationController.dispose();
+    _latController.dispose();
+    _lngController.dispose();
+    _priceController.dispose();
+    _averageGraduationCostController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    setState(() => _isLoading = true);
+    
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please sign in to create listings')));
+        return;
+      }
+
+      final school = FlightSchool(
+        id: widget.school?.id ?? '',
+        name: _nameController.text,
+        location: _locationController.text,
+        lat: double.tryParse(_latController.text) ?? 0.0,
+        lng: double.tryParse(_lngController.text) ?? 0.0,
+        rating: widget.school?.rating ?? 0.0,
+        price: double.tryParse(_priceController.text) ?? 0.0,
+        curriculum: List.from(_curriculum),
+        planesAvailable: List.from(_planesAvailable),
+        averageGraduationCost: double.tryParse(_averageGraduationCostController.text) ?? 0.0,
+        reviews: widget.school?.reviews ?? [],
+        lastUpdated: DateTime.now(),
+        isActive: true,
+      );
+
+      if (widget.school != null) {
+        // Update existing
+        await FirestoreService().updateFlightSchool(school.id, school.toFirestore());
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Flight school updated successfully!')));
+      } else {
+        // Create new
+        await FirestoreService().createFlightSchool(school);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Flight school created successfully!')));
+      }
+
+      await widget.onSaved(school);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _addCurriculum() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Curriculum Item'),
+        content: TextField(
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Curriculum item'),
+          onSubmitted: (value) {
+            if (value.isNotEmpty) {
+              setState(() => _curriculum.add(value));
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              final controller = TextEditingController();
+              if (controller.text.isNotEmpty) {
+                setState(() => _curriculum.add(controller.text));
+              }
+              Navigator.of(context).pop();
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _addPlane() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Available Aircraft'),
+        content: TextField(
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Aircraft type'),
+          onSubmitted: (value) {
+            if (value.isNotEmpty) {
+              setState(() => _planesAvailable.add(value));
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              final controller = TextEditingController();
+              if (controller.text.isNotEmpty) {
+                setState(() => _planesAvailable.add(controller.text));
+              }
+              Navigator.of(context).pop();
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Flight School', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          // TODO: Add TextFormFields for all required fields
-          const SizedBox(height: 16),
-          Row(
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () async {
-                    // TODO: Validate and save
-                    // widget.onSaved(newSchool);
-                  },
-                  child: const Text('Save'),
-                ),
+              Text(
+                widget.school != null ? 'Edit Flight School' : 'Create Flight School',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
+              const SizedBox(height: 16),
+              
+              // Basic Information
+              const Text('Basic Information', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Name *'),
+                validator: (v) => v?.isEmpty == true ? 'Required' : null,
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _locationController,
+                decoration: const InputDecoration(labelText: 'Location *'),
+                validator: (v) => v?.isEmpty == true ? 'Required' : null,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _latController,
+                      decoration: const InputDecoration(labelText: 'Latitude'),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _lngController,
+                      decoration: const InputDecoration(labelText: 'Longitude'),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _priceController,
+                      decoration: const InputDecoration(labelText: 'Hourly Rate *'),
+                      keyboardType: TextInputType.number,
+                      validator: (v) => v?.isEmpty == true || double.tryParse(v!) == null ? 'Valid price required' : null,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _averageGraduationCostController,
+                      decoration: const InputDecoration(labelText: 'Avg Graduation Cost *'),
+                      keyboardType: TextInputType.number,
+                      validator: (v) => v?.isEmpty == true || double.tryParse(v!) == null ? 'Valid cost required' : null,
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Curriculum
+              Row(
+                children: [
+                  const Text('Curriculum', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: _addCurriculum,
+                  ),
+                ],
+              ),
+              if (_curriculum.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ...(_curriculum.map((item) => Chip(
+                  label: Text(item),
+                  onDeleted: () => setState(() => _curriculum.remove(item)),
+                ))),
+              ],
+              
+              const SizedBox(height: 16),
+              
+              // Available Aircraft
+              Row(
+                children: [
+                  const Text('Available Aircraft', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: _addPlane,
+                  ),
+                ],
+              ),
+              if (_planesAvailable.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ...(_planesAvailable.map((plane) => Chip(
+                  label: Text(plane),
+                  onDeleted: () => setState(() => _planesAvailable.remove(plane)),
+                ))),
+              ],
+              
+              const SizedBox(height: 24),
+              
+              // Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _save,
+                      child: _isLoading 
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        : Text(widget.school != null ? 'Update' : 'Create'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
