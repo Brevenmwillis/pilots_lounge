@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:pilots_lounge/models/user_profile.dart';
 import 'package:pilots_lounge/models/aircraft.dart';
+import 'package:pilots_lounge/models/instructor.dart';
 import 'package:pilots_lounge/models/review.dart';
 
 class FirestoreService {
@@ -239,5 +240,97 @@ class FirestoreService {
       await createUserProfile(profile);
     }
     return profile;
+  }
+
+  // Instructor Operations
+  Future<String> createInstructor(Instructor instructor) async {
+    try {
+      final docRef = await _firestore.collection('instructors').add({
+        'name': instructor.name,
+        'type': instructor.type,
+        'location': instructor.location,
+        'lat': instructor.lat,
+        'lng': instructor.lng,
+        'preferredLocations': instructor.preferredLocations,
+        'endorsements': instructor.endorsements,
+        'rating': instructor.rating,
+        'reviews': instructor.reviews.map((r) => r.toFirestore()).toList(),
+        'contactInfo': instructor.contactInfo,
+        'contactThroughApp': instructor.contactThroughApp,
+        'lastUpdated': FieldValue.serverTimestamp(),
+        'isActive': instructor.isActive,
+        'createdAt': FieldValue.serverTimestamp(),
+        'ownerId': _auth.currentUser?.uid,
+      });
+      return docRef.id;
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error creating instructor: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Instructor>> getInstructors({String? type}) async {
+    try {
+      Query query = _firestore.collection('instructors').where('isActive', isEqualTo: true);
+      
+      if (type != null && type != 'All') {
+        query = query.where('type', isEqualTo: type);
+      }
+      
+      final querySnapshot = await query.get();
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return Instructor(
+          id: doc.id,
+          name: data['name'] ?? '',
+          type: data['type'] ?? 'CFI',
+          location: data['location'] ?? '',
+          lat: (data['lat'] ?? 0).toDouble(),
+          lng: (data['lng'] ?? 0).toDouble(),
+          preferredLocations: List<String>.from(data['preferredLocations'] ?? []),
+          endorsements: List<String>.from(data['endorsements'] ?? []),
+          rating: (data['rating'] ?? 0).toDouble(),
+          reviews: (data['reviews'] as List?)?.map((r) => Review(
+            id: r['id'] ?? '',
+            userId: r['userId'] ?? '',
+            userName: r['userName'] ?? '',
+            rating: (r['rating'] ?? 0.0).toDouble(),
+            comment: r['comment'] ?? '',
+            date: r['date'] != null ? r['date'].toDate() : DateTime.now(),
+            ownerResponse: r['ownerResponse'],
+          )).toList() ?? [],
+          contactInfo: data['contactInfo'],
+          contactThroughApp: data['contactThroughApp'] ?? true,
+          lastUpdated: data['lastUpdated']?.toDate() ?? DateTime.now(),
+          isActive: data['isActive'] ?? true,
+        );
+      }).toList();
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error getting instructors: $e');
+      return [];
+    }
+  }
+
+  Future<void> updateInstructor(String instructorId, Map<String, dynamic> updates) async {
+    try {
+      updates['lastUpdated'] = FieldValue.serverTimestamp();
+      await _firestore.collection('instructors').doc(instructorId).update(updates);
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error updating instructor: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteInstructor(String instructorId) async {
+    try {
+      await _firestore.collection('instructors').doc(instructorId).delete();
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error deleting instructor: $e');
+      rethrow;
+    }
   }
 } 

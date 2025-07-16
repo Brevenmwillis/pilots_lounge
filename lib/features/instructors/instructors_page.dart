@@ -3,7 +3,12 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:pilots_lounge/models/instructor.dart';
 import 'package:pilots_lounge/services/map_icons.dart';
 import 'package:pilots_lounge/services/placeholder_images.dart';
+import 'package:pilots_lounge/services/firestore/firestore_service.dart';
+import 'package:pilots_lounge/widgets/loading_overlay.dart';
+import 'package:pilots_lounge/widgets/error_widgets.dart';
 import 'package:pilots_lounge/widgets/app_scaffold.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:pilots_lounge/widgets/centered_dialog.dart';
 
 class InstructorsPage extends StatefulWidget {
   const InstructorsPage({super.key});
@@ -16,41 +21,35 @@ class _InstructorsPageState extends State<InstructorsPage> {
   // ignore: unused_field
   GoogleMapController? _mapController;
   String _selectedType = 'All';
+  final FirestoreService _firestoreService = FirestoreService();
+  List<Instructor> _instructors = [];
+  bool _isLoading = true;
+  String? _error;
 
-  final List<Instructor> _instructors = [
-    Instructor(
-      id: '1',
-      name: 'John Smith',
-      type: 'CFI',
-      location: 'Phoenix Sky Harbor',
-      lat: 33.4342,
-      lng: -112.0116,
-      preferredLocations: ['Phoenix', 'Scottsdale', 'Mesa'],
-      endorsements: ['Private Pilot', 'Instrument Rating', 'Commercial Pilot'],
-      rating: 4.8,
-      reviews: [],
-      contactInfo: 'john.smith@email.com',
-      contactThroughApp: true,
-      lastUpdated: DateTime.now(),
-      isActive: true,
-    ),
-    Instructor(
-      id: '2',
-      name: 'Sarah Johnson',
-      type: 'DPE',
-      location: 'Scottsdale Airport',
-      lat: 33.6229,
-      lng: -111.9102,
-      preferredLocations: ['Scottsdale', 'Phoenix'],
-      endorsements: ['Private Pilot', 'Instrument Rating', 'Commercial Pilot', 'Multi-Engine'],
-      rating: 4.9,
-      reviews: [],
-      contactInfo: null,
-      contactThroughApp: true,
-      lastUpdated: DateTime.now(),
-      isActive: true,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadInstructors();
+  }
+
+  Future<void> _loadInstructors() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final instructors = await _firestoreService.getInstructors(type: _selectedType);
+      setState(() {
+        _instructors = instructors;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to load instructors: $e';
+        _isLoading = false;
+      });
+    }
+  }
 
   List<Instructor> get _filteredInstructors {
     if (_selectedType == 'All') return _instructors;
@@ -216,87 +215,143 @@ class _InstructorsPageState extends State<InstructorsPage> {
     );
   }
 
+  void _showInstructorForm({Instructor? instructor}) {
+    CenteredDialog.show(
+      context: context,
+      child: InstructorForm(
+        instructor: instructor,
+        onSaved: (newInstructor) async {
+          Navigator.of(context).pop();
+          await _loadInstructors();
+        },
+      ),
+    );
+  }
+
+  // ignore: unused_element
+  void _deleteInstructor(Instructor instructor) async {
+    try {
+      await FirestoreService().deleteInstructor(instructor.id);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Instructor deleted successfully!')));
+      await _loadInstructors();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting instructor: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_error != null) {
+      return AppScaffold(
+        currentIndex: 3,
+        child: NetworkErrorWidget(
+          onRetry: _loadInstructors,
+          customMessage: _error,
+        ),
+      );
+    }
+    if (_instructors.isEmpty && !_isLoading) {
+      return AppScaffold(
+        currentIndex: 3,
+        child: EmptyState(
+          title: 'No Instructors Found',
+          message: 'There are currently no instructors available.',
+          icon: Icons.school,
+          onAction: _loadInstructors,
+          actionText: 'Refresh',
+        ),
+      );
+    }
     return AppScaffold(
       currentIndex: 3,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                const Text('Filter: ', style: TextStyle(fontSize: 16)),
-                DropdownButton<String>(
-                  value: _selectedType,
-                  items: ['All', 'CFI', 'DPE'].map((type) {
-                    return DropdownMenuItem(value: type, child: Text(type));
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedType = value!;
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Stack(
-              children: [
-                GoogleMap(
-                  initialCameraPosition: const CameraPosition(
-                    target: LatLng(33.4, -111.8),
-                    zoom: 9,
-                  ),
-                  markers: _markers,
-                  onMapCreated: (c) => _mapController = c,
-                  myLocationEnabled: true,
-                  zoomControlsEnabled: false,
-                ),
-                          DraggableScrollableSheet(
-            initialChildSize: 0.4,
-            minChildSize: 0.3,
-            maxChildSize: 0.8,
-            builder: (_, controller) => Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                boxShadow: [BoxShadow(blurRadius: 10, color: Colors.black26)],
-              ),
-              child: Column(
+      child: LoadingOverlay(
+        isLoading: _isLoading,
+        message: 'Loading instructors...',
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: Row(
                 children: [
-                  // Drag handle
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+                  const Text('Filter: ', style: TextStyle(fontSize: 16)),
+                  DropdownButton<String>(
+                    value: _selectedType,
+                    items: ['All', 'CFI', 'DPE'].map((type) {
+                      return DropdownMenuItem(value: type, child: Text(type));
+                    }).toList(),
+                    onChanged: (value) async {
+                      setState(() {
+                        _selectedType = value!;
+                      });
+                      await _loadInstructors();
+                    },
                   ),
-                  // Cards
-                  Expanded(
-                    child: ListView.builder(
-                      controller: controller,
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      itemCount: _filteredInstructors.length,
-                      itemBuilder: (_, i) => Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: InstructorCard(instructor: _filteredInstructors[i]),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Stack(
+                children: [
+                  GoogleMap(
+                    initialCameraPosition: const CameraPosition(
+                      target: LatLng(33.4, -111.8),
+                      zoom: 9,
+                    ),
+                    markers: _markers,
+                    onMapCreated: (c) => _mapController = c,
+                    myLocationEnabled: true,
+                    zoomControlsEnabled: false,
+                  ),
+                  DraggableScrollableSheet(
+                    initialChildSize: 0.4,
+                    minChildSize: 0.3,
+                    maxChildSize: 0.8,
+                    builder: (_, controller) => Container(
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                        boxShadow: [BoxShadow(blurRadius: 10, color: Colors.black26)],
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[300],
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          Expanded(
+                            child: ListView.builder(
+                              controller: controller,
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              itemCount: _filteredInstructors.length,
+                              itemBuilder: (_, i) => Padding(
+                                padding: const EdgeInsets.only(right: 12),
+                                child: InstructorCard(instructor: _filteredInstructors[i]),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-              ],
+            Positioned(
+              bottom: 24,
+              right: 24,
+              child: FloatingActionButton(
+                onPressed: () => _showInstructorForm(),
+                child: const Icon(Icons.add),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -309,6 +364,8 @@ class InstructorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final isOwner = user != null && user.uid == instructor.id; // Adjust if ownerId is used
     return Card(
       elevation: 4,
       child: Container(
@@ -329,18 +386,57 @@ class InstructorCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: instructor.type == 'DPE' ? Colors.orange : Colors.blue,
-                    borderRadius: BorderRadius.circular(6),
+                if (isOwner) ...[
+                  IconButton(
+                    icon: const Icon(Icons.edit, size: 18),
+                    onPressed: () {
+                      CenteredDialog.show(
+                        context: context,
+                        child: InstructorForm(
+                          instructor: instructor,
+                          onSaved: (updatedInstructor) async {
+                            Navigator.of(context).pop();
+                            // Refresh the page data
+                            if (context.mounted) {
+                              final state = context.findAncestorStateOfType<_InstructorsPageState>();
+                              state?._loadInstructors();
+                            }
+                          },
+                        ),
+                      );
+                    },
                   ),
-                  child: Text(
-                    instructor.type,
-                    style: const TextStyle(color: Colors.white, fontSize: 9),
+                  IconButton(
+                    icon: const Icon(Icons.delete, size: 18),
+                    onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Delete Instructor'),
+                          content: const Text('Are you sure you want to delete this instructor?'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                            TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) {
+                        try {
+                          await FirestoreService().deleteInstructor(instructor.id);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Instructor deleted successfully!')));
+                            final state = context.findAncestorStateOfType<_InstructorsPageState>();
+                            state?._loadInstructors();
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting instructor: $e')));
+                          }
+                        }
+                      }
+                    },
                   ),
-                ),
+                ],
               ],
             ),
             const SizedBox(height: 2),
@@ -391,6 +487,317 @@ class InstructorCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+} 
+
+class InstructorForm extends StatefulWidget {
+  final Instructor? instructor;
+  final Future<void> Function(Instructor) onSaved;
+  const InstructorForm({this.instructor, required this.onSaved, super.key});
+  @override
+  State<InstructorForm> createState() => _InstructorFormState();
+}
+
+class _InstructorFormState extends State<InstructorForm> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _latController = TextEditingController();
+  final _lngController = TextEditingController();
+  final _contactInfoController = TextEditingController();
+  
+  final List<String> _endorsements = [];
+  final List<String> _preferredLocations = [];
+  
+  String _selectedType = 'CFI';
+  bool _contactThroughApp = true;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.instructor != null) {
+      _nameController.text = widget.instructor!.name;
+      _locationController.text = widget.instructor!.location;
+      _latController.text = widget.instructor!.lat.toString();
+      _lngController.text = widget.instructor!.lng.toString();
+      _contactInfoController.text = widget.instructor!.contactInfo ?? '';
+      _selectedType = widget.instructor!.type;
+      _contactThroughApp = widget.instructor!.contactThroughApp;
+      _endorsements.addAll(widget.instructor!.endorsements);
+      _preferredLocations.addAll(widget.instructor!.preferredLocations);
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _locationController.dispose();
+    _latController.dispose();
+    _lngController.dispose();
+    _contactInfoController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    setState(() => _isLoading = true);
+    
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please sign in to create listings')));
+        return;
+      }
+
+      final instructor = Instructor(
+        id: widget.instructor?.id ?? '',
+        name: _nameController.text,
+        type: _selectedType,
+        location: _locationController.text,
+        lat: double.tryParse(_latController.text) ?? 0.0,
+        lng: double.tryParse(_lngController.text) ?? 0.0,
+        preferredLocations: List.from(_preferredLocations),
+        endorsements: List.from(_endorsements),
+        rating: widget.instructor?.rating ?? 0.0,
+        reviews: widget.instructor?.reviews ?? [],
+        contactInfo: _contactInfoController.text.isEmpty ? null : _contactInfoController.text,
+        contactThroughApp: _contactThroughApp,
+        lastUpdated: DateTime.now(),
+        isActive: true,
+      );
+
+      if (widget.instructor != null) {
+        // Update existing
+        await FirestoreService().updateInstructor(instructor.id, instructor.toFirestore());
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Instructor updated successfully!')));
+      } else {
+        // Create new
+        await FirestoreService().createInstructor(instructor);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Instructor created successfully!')));
+      }
+
+      await widget.onSaved(instructor);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _addEndorsement() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Endorsement'),
+        content: TextField(
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Endorsement'),
+          onSubmitted: (value) {
+            if (value.isNotEmpty) {
+              setState(() => _endorsements.add(value));
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              final controller = TextEditingController();
+              if (controller.text.isNotEmpty) {
+                setState(() => _endorsements.add(controller.text));
+              }
+              Navigator.of(context).pop();
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _addPreferredLocation() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Preferred Location'),
+        content: TextField(
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Location'),
+          onSubmitted: (value) {
+            if (value.isNotEmpty) {
+              setState(() => _preferredLocations.add(value));
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              final controller = TextEditingController();
+              if (controller.text.isNotEmpty) {
+                setState(() => _preferredLocations.add(controller.text));
+              }
+              Navigator.of(context).pop();
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.instructor != null ? 'Edit Instructor' : 'Create Instructor',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              
+              // Basic Information
+              const Text('Basic Information', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Name *'),
+                validator: (v) => v?.isEmpty == true ? 'Required' : null,
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: _selectedType,
+                decoration: const InputDecoration(labelText: 'Type *'),
+                items: const [
+                  DropdownMenuItem(value: 'CFI', child: Text('CFI')),
+                  DropdownMenuItem(value: 'DPE', child: Text('DPE')),
+                ],
+                onChanged: (value) => setState(() => _selectedType = value!),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _locationController,
+                decoration: const InputDecoration(labelText: 'Location *'),
+                validator: (v) => v?.isEmpty == true ? 'Required' : null,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _latController,
+                      decoration: const InputDecoration(labelText: 'Latitude'),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _lngController,
+                      decoration: const InputDecoration(labelText: 'Longitude'),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Endorsements
+              Row(
+                children: [
+                  const Text('Endorsements', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: _addEndorsement,
+                  ),
+                ],
+              ),
+              if (_endorsements.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ...(_endorsements.map((endorsement) => Chip(
+                  label: Text(endorsement),
+                  onDeleted: () => setState(() => _endorsements.remove(endorsement)),
+                ))),
+              ],
+              
+              const SizedBox(height: 16),
+              
+              // Preferred Locations
+              Row(
+                children: [
+                  const Text('Preferred Locations', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: _addPreferredLocation,
+                  ),
+                ],
+              ),
+              if (_preferredLocations.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ...(_preferredLocations.map((location) => Chip(
+                  label: Text(location),
+                  onDeleted: () => setState(() => _preferredLocations.remove(location)),
+                ))),
+              ],
+              
+              const SizedBox(height: 16),
+              
+              // Contact Information
+              const Text('Contact Information', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _contactInfoController,
+                decoration: const InputDecoration(labelText: 'Contact Information'),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                title: const Text('Contact through app'),
+                value: _contactThroughApp,
+                onChanged: (value) => setState(() => _contactThroughApp = value ?? true),
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _save,
+                      child: _isLoading 
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        : Text(widget.instructor != null ? 'Update' : 'Create'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

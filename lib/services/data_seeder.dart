@@ -1,6 +1,8 @@
-// ignore_for_file: avoid_print
+// ignore_for_file: avoid_print, unused_import
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+// ignore: duplicate_ignore
+// ignore: unused_import
 import 'package:pilots_lounge/models/aircraft.dart';
 import 'package:pilots_lounge/models/instructor.dart';
 import 'package:pilots_lounge/models/mechanic.dart';

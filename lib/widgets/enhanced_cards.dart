@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 
 class AnimatedCard extends StatefulWidget {
@@ -282,7 +284,7 @@ class ActionCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.1),
+                color: iconColor?.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(

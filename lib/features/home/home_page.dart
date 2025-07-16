@@ -4,6 +4,7 @@ import 'package:pilots_lounge/widgets/app_scaffold.dart';
 import 'package:pilots_lounge/services/auth/auth_service.dart';
 import 'package:pilots_lounge/services/firestore/firestore_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -207,6 +208,21 @@ class _HomePageState extends State<HomePage> {
             _buildFeatureList('• Pre-buy inspection connections'),
             _buildFeatureList('• Ferry pilot services'),
             _buildFeatureList('• International flight support'),
+            const SizedBox(height: 24),
+            
+            // Temporary Admin Button (remove in production)
+            if (kDebugMode) ...[
+              ElevatedButton.icon(
+                onPressed: () => context.go('/admin/seed-data'),
+                icon: const Icon(Icons.admin_panel_settings),
+                label: const Text('Admin: Seed Data'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
           ],
         ),
       ),

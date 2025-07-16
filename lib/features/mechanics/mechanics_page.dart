@@ -3,7 +3,12 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:pilots_lounge/models/mechanic.dart';
 import 'package:pilots_lounge/services/map_icons.dart';
 import 'package:pilots_lounge/services/placeholder_images.dart';
+import 'package:pilots_lounge/services/firestore/data_service.dart';
+import 'package:pilots_lounge/widgets/loading_overlay.dart';
+import 'package:pilots_lounge/widgets/error_widgets.dart';
 import 'package:pilots_lounge/widgets/app_scaffold.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:pilots_lounge/widgets/centered_dialog.dart';
 
 class MechanicsPage extends StatefulWidget {
   const MechanicsPage({super.key});
@@ -15,48 +20,35 @@ class MechanicsPage extends StatefulWidget {
 class _MechanicsPageState extends State<MechanicsPage> {
   // ignore: unused_field
   GoogleMapController? _mapController;
+  final DataService _dataService = DataService();
+  List<Mechanic> _mechanics = [];
+  bool _isLoading = true;
+  String? _error;
 
-  final List<Mechanic> _mechanics = [
-    Mechanic(
-      id: '1',
-      name: 'Mike Johnson A&P',
-      location: 'Phoenix Sky Harbor',
-      lat: 33.4342,
-      lng: -112.0116,
-      specializations: ['Piston Engines', 'Avionics', 'Annual Inspections'],
-      averageQuotes: const {
-        'Annual Inspection': 800,
-        'Oil Change': 150,
-        '100-Hour Inspection': 600,
-        'Avionics Installation': 2000,
-      },
-      contactInfo: 'mike.johnson@email.com',
-      travels: true,
-      rating: 4.8,
-      reviews: [],
-      lastUpdated: DateTime.now(),
-      isActive: true,
-    ),
-    Mechanic(
-      id: '2',
-      name: 'Bob Wilson Aviation',
-      location: 'Scottsdale Airport',
-      lat: 33.6229,
-      lng: -111.9102,
-      specializations: ['Turbine Engines', 'Composite Repair'],
-      averageQuotes: const {
-        'Annual Inspection': 1200,
-        'Turbine Inspection': 2500,
-        'Composite Repair': 800,
-      },
-      contactInfo: 'bob.wilson@email.com',
-      travels: false,
-      rating: 4.9,
-      reviews: [],
-      lastUpdated: DateTime.now(),
-      isActive: true,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadMechanics();
+  }
+
+  Future<void> _loadMechanics() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final mechanics = await _dataService.getMechanics();
+      setState(() {
+        _mechanics = mechanics;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to load mechanics: $e';
+        _isLoading = false;
+      });
+    }
+  }
 
   Set<Marker> get _markers => _mechanics.map((m) {
         return Marker(
@@ -217,62 +209,118 @@ class _MechanicsPageState extends State<MechanicsPage> {
     );
   }
 
+  void _showMechanicForm({Mechanic? mechanic}) {
+    CenteredDialog.show(
+      context: context,
+      child: MechanicForm(
+        mechanic: mechanic,
+        onSaved: (newMechanic) async {
+          // If editing, update; else, create
+          if (mechanic != null) {
+            // TODO: update logic
+          } else {
+            // TODO: create logic
+          }
+          Navigator.of(context).pop();
+          await _loadMechanics();
+        },
+      ),
+    );
+  }
+
+  // ignore: unused_element
+  void _deleteMechanic(Mechanic mechanic) async {
+    // TODO: delete logic
+    await _loadMechanics();
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_error != null) {
+      return AppScaffold(
+        currentIndex: 6,
+        child: NetworkErrorWidget(
+          onRetry: _loadMechanics,
+          customMessage: _error,
+        ),
+      );
+    }
+    if (_mechanics.isEmpty && !_isLoading) {
+      return AppScaffold(
+        currentIndex: 6,
+        child: EmptyState(
+          title: 'No Mechanics Found',
+          message: 'There are currently no mechanics available.',
+          icon: Icons.build,
+          onAction: _loadMechanics,
+          actionText: 'Refresh',
+        ),
+      );
+    }
     return AppScaffold(
       currentIndex: 6,
-      child: Stack(
-        children: [
-          GoogleMap(
-            initialCameraPosition: const CameraPosition(
-              target: LatLng(33.4, -111.8),
-              zoom: 9,
-            ),
-            markers: _markers,
-            onMapCreated: (c) => _mapController = c,
-            myLocationEnabled: true,
-            zoomControlsEnabled: false,
-          ),
-          DraggableScrollableSheet(
-            initialChildSize: 0.4,
-            minChildSize: 0.3,
-            maxChildSize: 0.8,
-            builder: (_, controller) => Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                boxShadow: [BoxShadow(blurRadius: 10, color: Colors.black26)],
+      child: LoadingOverlay(
+        isLoading: _isLoading,
+        message: 'Loading mechanics...',
+        child: Stack(
+          children: [
+            GoogleMap(
+              initialCameraPosition: const CameraPosition(
+                target: LatLng(33.4, -111.8),
+                zoom: 9,
               ),
-              child: Column(
-                children: [
-                  // Drag handle
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  // Cards
-                  Expanded(
-                    child: ListView.builder(
-                      controller: controller,
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      itemCount: _mechanics.length,
-                      itemBuilder: (_, i) => Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: MechanicCard(mechanic: _mechanics[i]),
+              markers: _markers,
+              onMapCreated: (c) => _mapController = c,
+              myLocationEnabled: true,
+              zoomControlsEnabled: false,
+            ),
+            DraggableScrollableSheet(
+              initialChildSize: 0.4,
+              minChildSize: 0.3,
+              maxChildSize: 0.8,
+              builder: (_, controller) => Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  boxShadow: [BoxShadow(blurRadius: 10, color: Colors.black26)],
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                  ),
-                ],
+                    Expanded(
+                      child: ListView.builder(
+                        controller: controller,
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        itemCount: _mechanics.length,
+                        itemBuilder: (_, i) => Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: MechanicCard(mechanic: _mechanics[i]),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+            Positioned(
+              bottom: 24,
+              right: 24,
+              child: FloatingActionButton(
+                onPressed: () => _showMechanicForm(),
+                child: const Icon(Icons.add),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -285,6 +333,8 @@ class MechanicCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final isOwner = user != null && user.uid == mechanic.id; // Adjust if ownerId is used
     return Card(
       elevation: 4,
       child: Container(
@@ -295,11 +345,53 @@ class MechanicCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              mechanic.name,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    mechanic.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (isOwner) ...[
+                  IconButton(
+                    icon: const Icon(Icons.edit, size: 18),
+                    onPressed: () {
+                      CenteredDialog.show(
+                        context: context,
+                        child: MechanicForm(
+                          mechanic: mechanic,
+                          onSaved: (updatedMechanic) async {
+                            // TODO: update logic
+                            Navigator.of(context).pop();
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete, size: 18),
+                    onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Delete Mechanic'),
+                          content: const Text('Are you sure you want to delete this mechanic?'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                            TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) {
+                        // TODO: delete logic
+                      }
+                    },
+                  ),
+                ],
+              ],
             ),
             const SizedBox(height: 2),
             Text(
@@ -362,6 +454,52 @@ class MechanicCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class MechanicForm extends StatefulWidget {
+  final Mechanic? mechanic;
+  final Future<void> Function(Mechanic) onSaved;
+  const MechanicForm({this.mechanic, required this.onSaved, super.key});
+  @override
+  State<MechanicForm> createState() => _MechanicFormState();
+}
+
+class _MechanicFormState extends State<MechanicForm> {
+  // TODO: Add controllers and form fields for all Mechanic properties
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Mechanic', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          // TODO: Add TextFormFields for all required fields
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    // TODO: Validate and save
+                    // widget.onSaved(newMechanic);
+                  },
+                  child: const Text('Save'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
