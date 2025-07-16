@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:pilots_lounge/models/faa_airport_data.dart';
-// ignore: unused_import
 import 'package:pilots_lounge/models/review.dart';
 import 'package:flutter/foundation.dart';
 
