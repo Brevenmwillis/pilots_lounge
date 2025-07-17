@@ -515,7 +515,7 @@ class FirestoreService {
     try {
       final querySnapshot = await _firestore.collection('airports').where('isActive', isEqualTo: true).get();
       return querySnapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
+        final data = doc.data();
         return Airport(
           id: doc.id,
           code: data['code'] ?? '',
@@ -549,6 +549,57 @@ class FirestoreService {
     } catch (e) {
       // ignore: avoid_print
       print('Error getting airports: $e');
+      return [];
+    }
+  }
+
+  // Get aircraft for rent
+  Future<List<Aircraft>> getAircraftForRent() async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('aircraft_listings')
+          .where('isActive', isEqualTo: true)
+          .where('type', isEqualTo: 'rental')
+          .get();
+      
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        return Aircraft(
+          id: doc.id,
+          registration: data['registration'] ?? '',
+          make: data['make'] ?? '',
+          model: data['model'] ?? '',
+          year: data['year'] ?? 0,
+          price: (data['price'] ?? 0).toDouble(),
+          location: data['location'] ?? '',
+          lat: (data['lat'] ?? 0).toDouble(),
+          lng: (data['lng'] ?? 0).toDouble(),
+          avionics: List<String>.from(data['avionics'] ?? []),
+          specs: Map<String, String>.from(data['specs'] ?? {}),
+          rating: (data['rating'] ?? 0).toDouble(),
+          reviews: (data['reviews'] as List?)?.map((r) => Review(
+            id: r['id'] ?? '',
+            userId: r['userId'] ?? '',
+            userName: r['userName'] ?? '',
+            rating: (r['rating'] ?? 0.0).toDouble(),
+            comment: r['comment'] ?? '',
+            date: r['date'] != null ? r['date'].toDate() : DateTime.now(),
+            ownerResponse: r['ownerResponse'],
+          )).toList() ?? [],
+          ownerId: data['ownerId'] ?? '',
+          bookingWebsite: data['bookingWebsite'] ?? '',
+          paymentMethods: List<String>.from(data['paymentMethods'] ?? []),
+          insuranceRequirements: data['insuranceRequirements'] ?? '',
+          insuranceDeductible: (data['insuranceDeductible'] ?? 0).toDouble(),
+          internationalFlights: data['internationalFlights'] ?? false,
+          lastUpdated: data['lastUpdated']?.toDate() ?? DateTime.now(),
+          isActive: data['isActive'] ?? true,
+          type: data['type'] ?? 'rental',
+        );
+      }).toList();
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error getting rental aircraft: $e');
       return [];
     }
   }

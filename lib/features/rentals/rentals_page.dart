@@ -1,10 +1,13 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:pilots_lounge/models/aircraft.dart';
-import 'package:pilots_lounge/services/firestore/data_service.dart';
+import 'package:pilots_lounge/services/firestore/firestore_service.dart';
 import 'package:pilots_lounge/services/map_icons.dart';
 import 'package:pilots_lounge/services/placeholder_images.dart';
 import 'package:pilots_lounge/widgets/app_scaffold.dart';
+import 'package:pilots_lounge/widgets/arrow_navigation.dart';
 import 'package:pilots_lounge/widgets/loading_overlay.dart';
 import 'package:pilots_lounge/widgets/error_widgets.dart';
 
@@ -16,16 +19,50 @@ class RentalsPage extends StatefulWidget {
 }
 
 class _RentalsPageState extends State<RentalsPage> {
+  // ignore: unused_field
   GoogleMapController? _mapController;
-  final DataService _dataService = DataService();
+  final FirestoreService _firestoreService = FirestoreService();
+  final ScrollController _scrollController = ScrollController();
   List<Aircraft> _aircraft = [];
   bool _isLoading = true;
   String? _error;
+  int _currentIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _loadAircraft();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToPrevious() {
+    if (_currentIndex > 0) {
+      _currentIndex--;
+      _scrollToIndex(_currentIndex);
+    }
+  }
+
+  void _scrollToNext() {
+    if (_currentIndex < _aircraft.length - 1) {
+      _currentIndex++;
+      _scrollToIndex(_currentIndex);
+    }
+  }
+
+  void _scrollToIndex(int index) {
+    if (_scrollController.hasClients) {
+      final itemWidth = 292.0; // 280 (card width) + 12 (padding)
+      _scrollController.animateTo(
+        index * itemWidth,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   Future<void> _loadAircraft() async {
@@ -35,7 +72,7 @@ class _RentalsPageState extends State<RentalsPage> {
     });
 
     try {
-      final aircraft = await _dataService.getAircraftForRent();
+      final aircraft = await _firestoreService.getAircraftForRent();
       setState(() {
         _aircraft = aircraft;
         _isLoading = false;
@@ -259,33 +296,17 @@ class _RentalsPageState extends State<RentalsPage> {
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                    // Header
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Row(
-                        children: [
-                          const Text(
-                            'Available Aircraft',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            '${_aircraft.length} aircraft',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
+                    // Header with navigation
+                    ArrowNavigation(
+                      title: 'Aircraft Rentals',
+                      itemCount: _aircraft.length,
+                      onPrevious: _aircraft.length > 1 ? _scrollToPrevious : null,
+                      onNext: _aircraft.length > 1 ? _scrollToNext : null,
                     ),
                     // Cards
                     Expanded(
                       child: ListView.builder(
-                        controller: controller,
+                        controller: _scrollController,
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         itemCount: _aircraft.length,
@@ -299,6 +320,13 @@ class _RentalsPageState extends State<RentalsPage> {
                 ),
               ),
             ),
+                    // Header with navigation
+                    ArrowNavigation(
+                      title: 'Aircraft Rentals',
+                      itemCount: _aircraft.length,
+                      onPrevious: _aircraft.length > 1 ? _scrollToPrevious : null,
+                      onNext: _aircraft.length > 1 ? _scrollToNext : null,
+                    ),
           ],
         ),
       ),
@@ -317,8 +345,8 @@ class AircraftCard extends StatelessWidget {
       elevation: 4,
       child: Container(
         width: 280,
-        constraints: const BoxConstraints(maxHeight: 160),
-        padding: const EdgeInsets.all(10),
+        height: 180, // Fixed height to prevent overflow
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
