@@ -4,6 +4,7 @@ import 'package:pilots_lounge/models/airport.dart';
 import 'package:pilots_lounge/services/map_icons.dart';
 import 'package:pilots_lounge/services/placeholder_images.dart';
 import 'package:pilots_lounge/widgets/app_scaffold.dart';
+import 'package:pilots_lounge/widgets/arrow_navigation.dart';
 import 'faa_chart_supplement_page.dart';
 import 'faa_pdf_test_page.dart';
 import 'package:pilots_lounge/services/firestore/firestore_service.dart';
@@ -21,14 +22,47 @@ class _AirportsPageState extends State<AirportsPage> {
   // ignore: unused_field
   GoogleMapController? _mapController;
   final FirestoreService _firestoreService = FirestoreService();
+  final ScrollController _scrollController = ScrollController();
   List<Airport> _airports = [];
   bool _isLoading = true;
   String? _error;
+  int _currentIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _loadAirports();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToPrevious() {
+    if (_currentIndex > 0) {
+      _currentIndex--;
+      _scrollToIndex(_currentIndex);
+    }
+  }
+
+  void _scrollToNext() {
+    if (_currentIndex < _airports.length - 1) {
+      _currentIndex++;
+      _scrollToIndex(_currentIndex);
+    }
+  }
+
+  void _scrollToIndex(int index) {
+    if (_scrollController.hasClients) {
+      final itemWidth = 272.0; // 260 (card width) + 12 (padding)
+      _scrollController.animateTo(
+        index * itemWidth,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   Future<void> _loadAirports() async {
@@ -517,22 +551,12 @@ class _AirportsPageState extends State<AirportsPage> {
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
-                          // Header
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.place, color: Colors.blue),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Airports (${_airports.length})',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
+                          // Header with navigation
+                          ArrowNavigation(
+                            title: 'Airports',
+                            itemCount: _airports.length,
+                            onPrevious: _airports.length > 1 ? _scrollToPrevious : null,
+                            onNext: _airports.length > 1 ? _scrollToNext : null,
                           ),
                           // Airport cards list
                           Expanded(
@@ -563,12 +587,12 @@ class _AirportsPageState extends State<AirportsPage> {
                                     ),
                                   )
                                 : ListView.builder(
-                                    controller: controller,
+                                    controller: _scrollController,
                                     scrollDirection: Axis.horizontal,
                                     padding: const EdgeInsets.symmetric(horizontal: 12),
                                     itemCount: _airports.length,
                                     itemBuilder: (_, i) => Padding(
-                                      padding: const EdgeInsets.only(right: 12, bottom: 8),
+                                      padding: const EdgeInsets.only(right: 12, bottom: 16),
                                       child: AirportCard(
                                         airport: _airports[i],
                                         onTap: () => _showAirportDetails(_airports[i]),
