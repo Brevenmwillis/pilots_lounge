@@ -507,6 +507,7 @@ class _AirportsPageState extends State<AirportsPage> {
                       ),
                       child: Column(
                         children: [
+                          // Drag handle
                           Container(
                             margin: const EdgeInsets.symmetric(vertical: 8),
                             width: 40,
@@ -516,20 +517,64 @@ class _AirportsPageState extends State<AirportsPage> {
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
-                          Expanded(
-                            child: ListView.builder(
-                              controller: controller,
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              itemCount: _airports.length,
-                              itemBuilder: (_, i) => Padding(
-                                padding: const EdgeInsets.only(right: 12),
-                                child: AirportCard(
-                                  airport: _airports[i],
-                                  onTap: () => _showAirportDetails(_airports[i]),
+                          // Header
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.place, color: Colors.blue),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Airports (${_airports.length})',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
+                              ],
                             ),
+                          ),
+                          // Airport cards list
+                          Expanded(
+                            child: _airports.isEmpty
+                                ? const Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.place, size: 48, color: Colors.grey),
+                                        SizedBox(height: 16),
+                                        Text(
+                                          'No airports found',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                        SizedBox(height: 8),
+                                        Text(
+                                          'Extract airports from FAA PDF in Admin Panel',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    controller: controller,
+                                    scrollDirection: Axis.horizontal,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                    itemCount: _airports.length,
+                                    itemBuilder: (_, i) => Padding(
+                                      padding: const EdgeInsets.only(right: 12, bottom: 8),
+                                      child: AirportCard(
+                                        airport: _airports[i],
+                                        onTap: () => _showAirportDetails(_airports[i]),
+                                      ),
+                                    ),
+                                  ),
                           ),
                         ],
                       ),
@@ -556,58 +601,70 @@ class AirportCard extends StatelessWidget {
     return Card(
       elevation: 4,
       child: Container(
-        width: 280, // Reduced width to prevent overflow
-        constraints: const BoxConstraints(maxHeight: 180),
-        padding: const EdgeInsets.all(8),
+        width: 260, // Slightly reduced width
+        height: 200, // Fixed height to prevent overflow
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Airport name and code
             Text(
               '${airport.code} - ${airport.name}',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 4),
+            
+            // Location
             Text(
               airport.location, 
-              style: const TextStyle(fontSize: 10, color: Colors.grey),
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
+            
+            // Rating
             Row(
               children: [
-                const Icon(Icons.star, size: 12, color: Colors.amber),
-                Text('${airport.rating}', style: const TextStyle(fontSize: 10)),
+                const Icon(Icons.star, size: 14, color: Colors.amber),
+                const SizedBox(width: 2),
+                Text('${airport.rating}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
                 const SizedBox(width: 4),
                 Flexible(
                   child: Text('(${airport.reviews.length} reviews)', 
-                       style: const TextStyle(fontSize: 8, color: Colors.grey)),
+                       style: const TextStyle(fontSize: 9, color: Colors.grey)),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Restaurants: ${airport.restaurants.take(1).join(", ")}', 
-              style: const TextStyle(fontSize: 8),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 6),
+            
+            // Services summary
+            if (airport.services.isNotEmpty) ...[
+              Text(
+                'Services: ${airport.services.take(2).join(", ")}', 
+                style: const TextStyle(fontSize: 9),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+            ],
+            
+            // Amenities
             Row(
               children: [
                 Icon(
                   airport.hasCourtesyCar ? Icons.directions_car : Icons.block,
-                  size: 12,
+                  size: 14,
                   color: airport.hasCourtesyCar ? Colors.green : Colors.red,
                 ),
                 const SizedBox(width: 4),
-                Flexible(
+                Expanded(
                   child: Text(
                     airport.hasCourtesyCar ? 'Courtesy Car' : 'No Courtesy Car',
-                    style: const TextStyle(fontSize: 8),
+                    style: const TextStyle(fontSize: 9),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -618,42 +675,47 @@ class AirportCard extends StatelessWidget {
               children: [
                 Icon(
                   airport.hasSelfServeFuel ? Icons.local_gas_station : Icons.block,
-                  size: 12,
+                  size: 14,
                   color: airport.hasSelfServeFuel ? Colors.green : Colors.red,
                 ),
                 const SizedBox(width: 4),
-                Flexible(
+                Expanded(
                   child: Text(
                     airport.hasSelfServeFuel ? 'Self-Serve Fuel' : 'FBO Fuel Only',
-                    style: const TextStyle(fontSize: 8),
+                    style: const TextStyle(fontSize: 9),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 4),
+            
+            // Pricing
             Text(
-              'Services: ${airport.services.take(2).join(", ")}', 
-              style: const TextStyle(fontSize: 8),
+              'Tie-down: \$${airport.tieDownPrice}/day', 
+              style: const TextStyle(fontSize: 9),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 2),
             Text(
-              'Tie-down: \$${airport.tieDownPrice}/day | Hangar: \$${airport.hangarPrice}/month', 
-              style: const TextStyle(fontSize: 8),
+              'Hangar: \$${airport.hangarPrice}/month', 
+              style: const TextStyle(fontSize: 9),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
+            
             const Spacer(),
+            
+            // View Details button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: onTap,
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  textStyle: const TextStyle(fontSize: 11),
                 ),
-                child: const Text('View Details', style: TextStyle(fontSize: 10)),
+                child: const Text('View Details'),
               ),
             ),
           ],
