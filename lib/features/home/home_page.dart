@@ -135,6 +135,16 @@ class _HomePageState extends State<HomePage> {
                 label: const Text('My Profile'),
                 onPressed: () => context.go('/profile'),
               ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.admin_panel_settings),
+                label: const Text('Admin Panel'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => context.go('/admin/seed-data'),
+              ),
               const SizedBox(height: 24),
             ],
             // Feature Cards
