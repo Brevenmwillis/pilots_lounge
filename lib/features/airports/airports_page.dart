@@ -6,7 +6,7 @@ import 'package:pilots_lounge/services/placeholder_images.dart';
 import 'package:pilots_lounge/widgets/app_scaffold.dart';
 import 'faa_chart_supplement_page.dart';
 import 'faa_pdf_test_page.dart';
-import 'package:pilots_lounge/services/firestore/data_service.dart';
+import 'package:pilots_lounge/services/firestore/firestore_service.dart';
 import 'package:pilots_lounge/widgets/loading_overlay.dart';
 import 'package:pilots_lounge/widgets/error_widgets.dart';
 
@@ -20,7 +20,7 @@ class AirportsPage extends StatefulWidget {
 class _AirportsPageState extends State<AirportsPage> {
   // ignore: unused_field
   GoogleMapController? _mapController;
-  final DataService _dataService = DataService();
+  final FirestoreService _firestoreService = FirestoreService();
   List<Airport> _airports = [];
   bool _isLoading = true;
   String? _error;
@@ -37,7 +37,7 @@ class _AirportsPageState extends State<AirportsPage> {
       _error = null;
     });
     try {
-      final airports = await _dataService.getAirports();
+      final airports = await _firestoreService.getAirports();
       setState(() {
         _airports = airports;
         _isLoading = false;

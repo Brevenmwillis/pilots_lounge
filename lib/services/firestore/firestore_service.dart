@@ -6,6 +6,7 @@ import 'package:pilots_lounge/models/instructor.dart';
 import 'package:pilots_lounge/models/mechanic.dart';
 import 'package:pilots_lounge/models/flight_school.dart';
 import 'package:pilots_lounge/models/review.dart';
+import 'package:pilots_lounge/models/airport.dart';
 
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
@@ -506,6 +507,49 @@ class FirestoreService {
       // ignore: avoid_print
       print('Error deleting flight school: $e');
       rethrow;
+    }
+  }
+
+  // Airport Operations
+  Future<List<Airport>> getAirports() async {
+    try {
+      final querySnapshot = await _firestore.collection('airports').where('isActive', isEqualTo: true).get();
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return Airport(
+          id: doc.id,
+          code: data['code'] ?? '',
+          name: data['name'] ?? '',
+          location: data['location'] ?? '',
+          lat: (data['lat'] ?? 0).toDouble(),
+          lng: (data['lng'] ?? 0).toDouble(),
+          restaurants: List<String>.from(data['restaurants'] ?? []),
+          hasCourtesyCar: data['hasCourtesyCar'] ?? false,
+          services: List<String>.from(data['services'] ?? []),
+          hasSelfServeFuel: data['hasSelfServeFuel'] ?? false,
+          tipsAndTricks: List<String>.from(data['tipsAndTricks'] ?? []),
+          hasTieDowns: data['hasTieDowns'] ?? false,
+          hasHangars: data['hasHangars'] ?? false,
+          tieDownPrice: (data['tieDownPrice'] ?? 0).toDouble(),
+          hangarPrice: (data['hangarPrice'] ?? 0).toDouble(),
+          rating: (data['rating'] ?? 0).toDouble(),
+          reviews: (data['reviews'] as List?)?.map((r) => Review(
+            id: r['id'] ?? '',
+            userId: r['userId'] ?? '',
+            userName: r['userName'] ?? '',
+            rating: (r['rating'] ?? 0.0).toDouble(),
+            comment: r['comment'] ?? '',
+            date: r['date'] != null ? r['date'].toDate() : DateTime.now(),
+            ownerResponse: r['ownerResponse'],
+          )).toList() ?? [],
+          lastUpdated: data['lastUpdated']?.toDate() ?? DateTime.now(),
+          isActive: data['isActive'] ?? true,
+        );
+      }).toList();
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error getting airports: $e');
+      return [];
     }
   }
 } 
