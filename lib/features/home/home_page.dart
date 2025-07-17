@@ -15,6 +15,30 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool _isSigningIn = false;
+  bool _isAutoSigningIn = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _attemptAutoSignIn();
+  }
+
+  Future<void> _attemptAutoSignIn() async {
+    setState(() => _isAutoSigningIn = true);
+    
+    try {
+      final userCred = await AuthService().signInSilently();
+      if (userCred != null) {
+        // Ensure user profile exists in Firestore
+        await FirestoreService().ensureUserProfile();
+      }
+    } catch (e) {
+      // ignore: avoid_print
+      print('Auto sign-in failed: $e');
+    } finally {
+      setState(() => _isAutoSigningIn = false);
+    }
+  }
 
   Future<void> _handleGoogleSignIn() async {
     setState(() => _isSigningIn = true);
@@ -87,25 +111,33 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             if (user == null) ...[
-              _isSigningIn
-                  ? const CircularProgressIndicator()
-                  : SizedBox(
-                      width: 220,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.login),
-                        label: const Text('Sign in with Google'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black87,
-                          textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+              _isAutoSigningIn
+                  ? const Column(
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Signing you in automatically...'),
+                      ],
+                    )
+                  : _isSigningIn
+                      ? const CircularProgressIndicator()
+                      : SizedBox(
+                          width: 220,
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.login),
+                            label: const Text('Sign in with Google'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: Colors.black87,
+                              textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            onPressed: _handleGoogleSignIn,
                           ),
                         ),
-                        onPressed: _handleGoogleSignIn,
-                      ),
-                    ),
               const SizedBox(height: 24),
             ] else ...[
               Row(
